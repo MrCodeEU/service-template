@@ -1,0 +1,39 @@
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+service-template
+main
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# OS
+Thumbs.db

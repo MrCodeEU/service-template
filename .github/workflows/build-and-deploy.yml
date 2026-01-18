@@ -1,0 +1,165 @@
+name: Build, Test and Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - 'dev/**'
+      - '*dev*'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1.0
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+        continue-on-error: true
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag as :latest for main branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Tag as :dev for dev branches
+            type=raw,value=dev,enable=${{ contains(github.ref, 'dev') }}
+            # Tag as :sha-<commit> for all pushes
+            type=sha,prefix=sha-,format=short
+            # Tag as version number for tags (v1.0.0 -> 1.0.0)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Generate build summary
+        run: |
+          echo "## Docker Image Published 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull command:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "docker pull ${FIRST_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: |
+      github.event_name != 'pull_request' && 
+      (github.ref == 'refs/heads/main' || contains(github.ref, 'dev'))
+
+    steps:
+      - name: Determine deployment tag
+        id: deploy-tag
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev" >> $GITHUB_OUTPUT
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger homelab deployment
+        run: |
+          echo "🚀 Triggering homelab deployment for ${{ steps.deploy-tag.outputs.environment }}..."
+          
+          RESPONSE=$(curl -X POST \
+            -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -w "\n%{http_code}" \
+            https://api.github.com/repos/MrCodeEU/homelab-automation/dispatches \
+            -d '{
+              "event_type": "service-update",
+              "client_payload": {
+                "service": "service-template",
+                "tag": "${{ steps.deploy-tag.outputs.tag }}",
+                "environment": "${{ steps.deploy-tag.outputs.environment }}",
+                "commit_sha": "${{ github.sha }}",
+                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+              }
+            }')
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          
+          if [ "$HTTP_CODE" -eq 204 ]; then
+            echo "✅ Deployment triggered successfully" >> $GITHUB_STEP_SUMMARY
+            echo "**Environment:** ${{ steps.deploy-tag.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Tag:** ${{ steps.deploy-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "⚠️ Failed to trigger deployment (HTTP $HTTP_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "Check DISPATCH_TOKEN secret configuration" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

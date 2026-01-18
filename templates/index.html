@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Environment }} - Service Template</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px;
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .env-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+
+        .env-production {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .env-development {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .env-staging {
+            background: linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%);
+            color: #333;
+        }
+
+        h1 {
+            font-size: 3em;
+            color: #333;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        .message {
+            font-size: 1.5em;
+            color: #555;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-card h3 {
+            font-size: 0.85em;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .info-card p {
+            font-size: 1.1em;
+            color: #333;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .emoji {
+            font-size: 4em;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 0.9em;
+            color: #888;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+            .message {
+                font-size: 1.2em;
+            }
+            .container {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {{ if eq .Environment "production" }}
+            <span class="env-badge env-production">{{ .Environment }}</span>
+            <div class="emoji">🚀</div>
+        {{ else if eq .Environment "development" }}
+            <span class="env-badge env-development">{{ .Environment }}</span>
+            <div class="emoji">🛠️</div>
+        {{ else if eq .Environment "staging" }}
+            <span class="env-badge env-staging">{{ .Environment }}</span>
+            <div class="emoji">🧪</div>
+        {{ else }}
+            <span class="env-badge env-production">{{ .Environment }}</span>
+            <div class="emoji">✨</div>
+        {{ end }}
+
+        <h1>Service Template</h1>
+        
+        <div class="message">
+            {{ .Message }}
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>Environment</h3>
+                <p>{{ .Environment }}</p>
+            </div>
+            <div class="info-card">
+                <h3>Version</h3>
+                <p>{{ .Version }}</p>
+            </div>
+            <div class="info-card">
+                <h3>Hostname</h3>
+                <p>{{ .Hostname }}</p>
+            </div>
+            <div class="info-card">
+                <h3>Timestamp</h3>
+                <p>{{ .Timestamp }}</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            Homelab Service Template • Ready for deployment
+        </div>
+    </div>
+</body>
+</html>

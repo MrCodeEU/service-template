@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  service-template-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: service-template-dev
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - DISPLAY_MESSAGE=🛠️ Development/Staging Environment - Testing in Progress
+      - ENVIRONMENT=development
+      - VERSION=dev-latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
