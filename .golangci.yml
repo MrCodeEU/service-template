@@ -1,38 +1,43 @@
-version: v2
+version: "2"
 
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - revive
     - gocritic
     - gosec
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  govet:
-    settings:
-      shadow:
-        strict: true
-  revive:
-    confidence: 0.8
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable:
+        - shadow
+    revive:
+      confidence: 0.8
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+
+linters:
+  exclusions:
+    presets:
+      - default
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 
