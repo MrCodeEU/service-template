@@ -57,13 +57,17 @@ func main() {
 	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"healthy","environment":"%s","version":"%s"}`, environment, version)
+		if _, err := fmt.Fprintf(w, `{"status":"healthy","environment":"%s","version":"%s"}`, environment, version); err != nil {
+			log.Printf("Error writing health response: %v", err)
+		}
 	})
 
 	// Ready check endpoint
 	http.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"ready"}`)
+		if _, err := fmt.Fprintf(w, `{"status":"ready"}`); err != nil {
+			log.Printf("Error writing ready response: %v", err)
+		}
 	})
 
 	// Start server
@@ -72,7 +76,14 @@ func main() {
 	log.Printf("Version: %s", version)
 	log.Printf("Message: %s", message)
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	server := &http.Server{
+		Addr:         ":" + port,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }

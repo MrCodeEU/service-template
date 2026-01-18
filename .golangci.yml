@@ -11,13 +11,6 @@ linters:
     - revive
     - gocritic
     - gosec
-
-formatters:
-  enable:
-    - gofmt
-    - goimports
-
-linters:
   settings:
     errcheck:
       check-type-assertions: true
@@ -32,10 +25,10 @@ linters:
         - performance
         - style
 
-linters:
-  exclusions:
-    presets:
-      - default
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 issues:
   max-issues-per-linter: 0

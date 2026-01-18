@@ -35,8 +35,14 @@ func TestGetEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.envValue != "" {
-				os.Setenv(tt.key, tt.envValue)
-				defer os.Unsetenv(tt.key)
+				if err := os.Setenv(tt.key, tt.envValue); err != nil {
+					t.Fatalf("Failed to set env: %v", err)
+				}
+				defer func() {
+					if err := os.Unsetenv(tt.key); err != nil {
+						t.Logf("Failed to unset env: %v", err)
+					}
+				}()
 			}
 
 			got := getEnv(tt.key, tt.defaultValue)
@@ -48,19 +54,21 @@ func TestGetEnv(t *testing.T) {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	req, err := http.NewRequest("GET", "/health", nil)
+	req, err := http.NewRequest("GET", "/health", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rr := httptest.NewRecorder()
-	
+
 	// Create a simple handler that mimics the health endpoint
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		environment := getEnv("ENVIRONMENT", "production")
 		version := getEnv("VERSION", "1.0.0")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy","environment":"` + environment + `","version":"` + version + `"}`))
+		if _, err := w.Write([]byte(`{"status":"healthy","environment":"` + environment + `","version":"` + version + `"}`)); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 	})
 
 	handler.ServeHTTP(rr, req)
@@ -76,16 +84,18 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestReadyEndpoint(t *testing.T) {
-	req, err := http.NewRequest("GET", "/ready", nil)
+	req, err := http.NewRequest("GET", "/ready", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rr := httptest.NewRecorder()
-	
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ready"}`))
+		if _, err := w.Write([]byte(`{"status":"ready"}`)); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 	})
 
 	handler.ServeHTTP(rr, req)
@@ -127,8 +137,10 @@ func TestEnvironmentDefaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Ensure env var is not set
-			os.Unsetenv(tt.envKey)
-			
+			if err := os.Unsetenv(tt.envKey); err != nil {
+				t.Logf("Failed to unset env: %v", err)
+			}
+
 			got := getEnv(tt.envKey, tt.defaultValue)
 			if got != tt.defaultValue {
 				t.Errorf("getEnv(%s) = %v, want %v", tt.envKey, got, tt.defaultValue)
