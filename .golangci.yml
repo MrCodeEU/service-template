@@ -1,3 +1,5 @@
+version: v2
+
 linters:
   enable:
     - errcheck
@@ -18,7 +20,9 @@ linters-settings:
   errcheck:
     check-type-assertions: true
   govet:
-    check-shadowing: true
+    settings:
+      shadow:
+        strict: true
   revive:
     confidence: 0.8
   gocritic:
@@ -34,4 +38,3 @@ issues:
 
 run:
   timeout: 5m
-  tests: true
