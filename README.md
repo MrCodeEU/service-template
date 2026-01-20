@@ -1,6 +1,16 @@
 # Service Template 🚀
 
+<!-- PORTFOLIO -->
+
 A simple, stylish Go-based web service template for homelab automation with Docker containerization, CI/CD, and multi-environment support.
+
+## Screenshots
+
+### Production Environment
+![Production Environment](assets/prod.png)
+
+### Development/Staging Environment
+![Development Environment](assets/dev.png)
 
 ## Features
 
@@ -209,3 +219,4 @@ MIT License - feel free to use this template for your homelab projects!
 ## Contributing
 
 This is a template repository. Fork it and make it your own!
+
