@@ -5,5 +5,9 @@
   "images": [
     "assets/prod.png",
     "assets/dev.png"
+  ],
+  "links": [
+    {"name": "Live", "url": "https://template.mljr.eu"},
+    {"name": "Staging", "url": "https://template.dev.mljr.eu"}
   ]
 }
