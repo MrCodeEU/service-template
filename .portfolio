@@ -1,5 +1,5 @@
 {
-  "description": "A stylish Go-based web service template for homelab automation with Docker containerization, CI/CD via GitHub Actions, and multi-environment support (production & staging).",
+  "description": "A Go-based web service template for my ansible based homelab automation with Docker containerization, CI/CD via GitHub Actions, and multi-environment support (production & staging).",
   "featured": true,
   "tags": ["golang", "docker", "devops", "cicd", "homelab", "automation", "web", "template"],
   "images": [
