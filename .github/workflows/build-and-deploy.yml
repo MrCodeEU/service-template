@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for SonarQube
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -38,14 +40,33 @@ jobs:
         with:
           version: v2.8.0
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Run tests with coverage
+        run: |
+          # The -coverpkg=./... ensures we get coverage for the whole project
+          go test -v -race -coverprofile=coverage.out -coverpkg=./... ./...
 
-      - name: Upload coverage
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: coverage.out
         continue-on-error: true
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ github.event.repository.name }}
+        continue-on-error: true  # Don't fail if SonarQube is unavailable
+
+      - name: SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: true  # Don't fail if SonarQube is unavailable
 
   build-and-push:
     runs-on: ubuntu-latest
@@ -96,10 +117,14 @@ jobs:
 
       - name: Generate build summary
         run: |
-          echo "## Docker Image Published 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** 
+          ${{ env.REGISTRY }}
+          ` >> $GITHUB_STEP_SUMMARY
+                    echo "**Image:** 
+          ${{ env.IMAGE_NAME }}
+          ` >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tags:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -116,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push
     if: |
-      github.event_name != 'pull_request' && 
+      github.event_name != 'pull_request' &&
       (github.ref == 'refs/heads/main' || contains(github.ref, 'dev'))
 
     steps:
@@ -133,33 +158,36 @@ jobs:
 
       - name: Trigger homelab deployment
         run: |
-          echo "🚀 Triggering homelab deployment for ${{ steps.deploy-tag.outputs.environment }}..."
-          
+          echo "Triggering homelab deployment for ${{ steps.deploy-tag.outputs.environment }}..."
+
           RESPONSE=$(curl -X POST \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -w "\n%{http_code}" \
             https://api.github.com/repos/MrCodeEU/homelab-automation/dispatches \
-            -d '{
-              "event_type": "service-update",
-              "client_payload": {
-                "service": "service-template",
-                "tag": "${{ steps.deploy-tag.outputs.tag }}",
-                "environment": "${{ steps.deploy-tag.outputs.environment }}",
-                "commit_sha": "${{ github.sha }}",
-                "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
-              }
-            }')
+            -d '{'
+              '"event_type": "service-update",'\
+              '"client_payload": {'
+                '"service": "${{ github.event.repository.name }}",'\
+                '"tag": "${{ steps.deploy-tag.outputs.tag }}",'\
+                '"environment": "${{ steps.deploy-tag.outputs.environment }}",'\
+                '"commit_sha": "${{ github.sha }}",'\
+                '"timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"'
+              '}'
+            '}')
           
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          
+
           if [ "$HTTP_CODE" -eq 204 ]; then
-            echo "✅ Deployment triggered successfully" >> $GITHUB_STEP_SUMMARY
+            echo "## Deployment Triggered" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Environment:** ${{ steps.deploy-tag.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
             echo "**Tag:** ${{ steps.deploy-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
             exit 0
           else
-            echo "⚠️ Failed to trigger deployment (HTTP $HTTP_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "## Deployment Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Failed to trigger deployment (HTTP $HTTP_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "Check DISPATCH_TOKEN secret configuration" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
