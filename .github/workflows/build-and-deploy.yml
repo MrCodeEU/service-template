@@ -40,13 +40,14 @@ jobs:
           go test -v -race -coverprofile=coverage.out -coverpkg=./... ./...
 
       - name: SonarQube Scan
-        # Updated to v6 to fix security warnings and auth handling
+        id: sonar-scan
+        # Only run if SonarQube secrets are configured
+        if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''
         uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
-          # In v6, multiple args should be quoted or passed clearly
           args: >
             -Dsonar.projectKey=${{ github.event.repository.name }}
             -Dsonar.go.coverage.reportPaths=coverage.out
@@ -55,6 +56,8 @@ jobs:
         continue-on-error: true
 
       - name: SonarQube Quality Gate
+        # Only run if the scan step ran and succeeded
+        if: steps.sonar-scan.outcome == 'success'
         uses: sonarsource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
