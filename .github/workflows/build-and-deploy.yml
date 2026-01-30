@@ -41,18 +41,14 @@ jobs:
 
       - name: SonarQube Scan
         id: sonar-scan
-        # Only run if SonarQube secrets are configured
-        if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''
         uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
-            -Dsonar.projectKey=${{ github.event.repository.name }}
+            -Dsonar.projectKey=MrCodeEU_service-template_d9931aa4-1820-4d15-8596-19eb42fbc385
             -Dsonar.go.coverage.reportPaths=coverage.out
-            -Dsonar.sources=.
-            -Dsonar.exclusions=**/*_test.go,**/vendor/**
         continue-on-error: true
 
       - name: SonarQube Quality Gate
