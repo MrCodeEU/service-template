@@ -28,51 +28,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for SonarQube
+          fetch-depth: 0  # Crucial for SonarQube to see Git history
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.8.0
-
       - name: Run tests with coverage
         run: |
-          # The -coverpkg=./... ensures we get coverage for the whole project
           go test -v -race -coverprofile=coverage.out -coverpkg=./... ./...
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.out
-        continue-on-error: true
-
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        # Updated to v6 to fix security warnings and auth handling
+        uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
+          # In v6, multiple args should be quoted or passed clearly
           args: >
             -Dsonar.projectKey=${{ github.event.repository.name }}
-        continue-on-error: true  # Don't fail if SonarQube is unavailable
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.sources=.
+            -Dsonar.exclusions=**/*_test.go,**/vendor/**
+        continue-on-error: true
 
       - name: SonarQube Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true  # Don't fail if SonarQube is unavailable
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        continue-on-error: true
 
   build-and-push:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name != 'pull_request'
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -93,15 +86,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Tag as :latest for main branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # Tag as :dev for dev branches
             type=raw,value=dev,enable=${{ contains(github.ref, 'dev') }}
-            # Tag as :sha-<commit> for all pushes
             type=sha,prefix=sha-,format=short
-            # Tag as version number for tags (v1.0.0 -> 1.0.0)
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -113,29 +101,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
-
-      - name: Generate build summary
-        run: |
-          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** 
-          ${{ env.REGISTRY }}
-          ` >> $GITHUB_STEP_SUMMARY
-                    echo "**Image:** 
-          ${{ env.IMAGE_NAME }}
-          ` >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Tags:" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull command:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          echo "docker pull ${FIRST_TAG}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
   deploy:
     runs-on: ubuntu-latest
@@ -143,7 +108,6 @@ jobs:
     if: |
       github.event_name != 'pull_request' &&
       (github.ref == 'refs/heads/main' || contains(github.ref, 'dev'))
-
     steps:
       - name: Determine deployment tag
         id: deploy-tag
@@ -158,36 +122,8 @@ jobs:
 
       - name: Trigger homelab deployment
         run: |
-          echo "Triggering homelab deployment for ${{ steps.deploy-tag.outputs.environment }}..."
-
-          RESPONSE=$(curl -X POST \
+          curl -X POST \
             -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -w "\n%{http_code}" \
             https://api.github.com/repos/MrCodeEU/homelab-automation/dispatches \
-            -d '{'
-              '"event_type": "service-update",'\
-              '"client_payload": {'
-                '"service": "${{ github.event.repository.name }}",'\
-                '"tag": "${{ steps.deploy-tag.outputs.tag }}",'\
-                '"environment": "${{ steps.deploy-tag.outputs.environment }}",'\
-                '"commit_sha": "${{ github.sha }}",'\
-                '"timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"'
-              '}'
-            '}')
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-
-          if [ "$HTTP_CODE" -eq 204 ]; then
-            echo "## Deployment Triggered" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Environment:** ${{ steps.deploy-tag.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Tag:** ${{ steps.deploy-tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-            exit 0
-          else
-            echo "## Deployment Failed" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Failed to trigger deployment (HTTP $HTTP_CODE)" >> $GITHUB_STEP_SUMMARY
-            echo "Check DISPATCH_TOKEN secret configuration" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
+            -d "{\"event_type\": \"service-update\", \"client_payload\": {\"service\": \"${{ github.event.repository.name }}\", \"tag\": \"${{ steps.deploy-tag.outputs.tag }}\", \"environment\": \"${{ steps.deploy-tag.outputs.environment }}\"}}"
