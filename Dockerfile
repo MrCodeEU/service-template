@@ -27,9 +27,11 @@ COPY --from=builder /app/templates ./templates
 # Expose port
 EXPOSE 8080
 
-# Health check
+# Health check - uses $PORT so deployments that override it (e.g. homelab's
+# 8181, to dodge a port collision) don't get marked unhealthy by a check
+# that's still hardcoded to the image's build-time default.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/health || exit 1
 
 # Run the application
 CMD ["./main"]
